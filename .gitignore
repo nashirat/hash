@@ -1,0 +1,35 @@
+node_modules/
+dist/
+har_extracted/
+frames/
+*.har
+record.mp4
+*.js.map
+
+# extracted site bundles (not our code)
+BkcwKBpp.js
+C-DkMPaA.js
+C_UVq32S.js
+D18l86zL.js
+D1ik4Yik.js
+Q29Utbr3.js
+nHGyLu-7.js
+particleWorker-KawRrRyh.js
+
+# raw GLBs in root (kept compressed versions in public/)
+/bg.glb
+/human_2.glb
+/intro_compressed.glb
+/investors_compressed.glb
+/legs-fixed.glb
+/logo.glb
+/outro_compressed.glb
+/portfolio.glb
+/rocks.glb
+correctfile.js
+
+# root-level draco (duplicated in public/)
+draco/
+
+# reference frames in public
+public/frame_*.png
