@@ -216,7 +216,7 @@ function exportConfig(transforms, camPos) {
 export default function RockReveal() {
   const [transforms, setTransforms] = useState(() => FLOWERS.map((_, i) => defaultTransform(i)));
   const [camPos, setCamPos] = useState([0, 0, 10]);
-  const [ambientIntensity, setAmbientIntensity] = useState(1.0);
+  const [ambientIntensity, setAmbientIntensity] = useState(2.2);
   const [copied, setCopied] = useState(false);
   const [panelPos, setPanelPos] = useState({ x: 16, y: 16 });
   const dragRef = useRef(null);
