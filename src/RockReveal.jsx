@@ -1,7 +1,8 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, useGLTF } from '@react-three/drei';
-import { EffectComposer, SMAA, Vignette, Bloom } from '@react-three/postprocessing';
+import { EffectComposer, SMAA, Vignette, Bloom, ToneMapping, HueSaturation, BrightnessContrast } from '@react-three/postprocessing';
+import { ToneMappingMode } from 'postprocessing';
 import * as THREE from 'three';
 
 useGLTF.preload('/Kiri.glb');
@@ -217,6 +218,7 @@ export default function RockReveal() {
   const [transforms, setTransforms] = useState(() => FLOWERS.map((_, i) => defaultTransform(i)));
   const [camPos, setCamPos] = useState([0, 0, 10]);
   const [ambientIntensity, setAmbientIntensity] = useState(2.2);
+  const [showAxes, setShowAxes] = useState(true);
   const [copied, setCopied] = useState(false);
   const [panelPos, setPanelPos] = useState({ x: 16, y: 16 });
   const dragRef = useRef(null);
@@ -228,6 +230,15 @@ export default function RockReveal() {
     bloomThreshold: 0.8,
   });
   const setPfxKey = (key, val) => setPfx((p) => ({ ...p, [key]: val }));
+
+  const [grade, setGrade] = useState({
+    exposure: 1.0,
+    saturation: 0.1,
+    hue: 0,
+    brightness: 0,
+    contrast: 0.05,
+  });
+  const setGradeKey = (key, val) => setGrade((p) => ({ ...p, [key]: val }));
 
   const [matSettings, setMatSettings] = useState({
     sheen: 0.3,
@@ -255,12 +266,13 @@ export default function RockReveal() {
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
       <Canvas
         camera={{ position: [0, 0, 10], fov: 34 }}
-        gl={{ antialias: false }}
+        gl={{ antialias: false, toneMapping: THREE.NoToneMapping }}
         style={{ background: '#000000' }}
       >
         <ambientLight intensity={ambientIntensity} />
+        {showAxes && <axesHelper args={[5]} />}
         <CameraRig position={camPos} />
-        <OrbitControls enableRotate={false} enableDamping dampingFactor={0.05} />
+        <OrbitControls enableRotate={false} enableZoom={false} enableDamping dampingFactor={0.05} />
         {FLOWERS.map((f, i) => (
           <FlowerModel
             key={f.file}
@@ -277,6 +289,9 @@ export default function RockReveal() {
         ))}
         <EffectComposer>
           <SMAA />
+          <ToneMapping mode={ToneMappingMode.ACES_FILMIC} exposure={grade.exposure} />
+          <HueSaturation hue={grade.hue} saturation={grade.saturation} />
+          <BrightnessContrast brightness={grade.brightness} contrast={grade.contrast} />
           <Vignette darkness={pfx.vignetteDark} offset={pfx.vignetteOffset} />
           <Bloom intensity={pfx.bloom} luminanceThreshold={pfx.bloomThreshold} luminanceSmoothing={0.3} />
         </EffectComposer>
@@ -293,6 +308,10 @@ export default function RockReveal() {
             <div style={s.groupHeader}><span style={s.label}>Scene</span></div>
             <div style={s.sectionLabel}>Ambient</div>
             <Knob label="I" step={0.05} value={ambientIntensity} onChange={setAmbientIntensity} />
+            <div style={{ ...s.row, marginTop: 6 }}>
+              <input type="checkbox" id="axes" checked={showAxes} onChange={(e) => setShowAxes(e.target.checked)} style={{ accentColor: '#7c3aed' }} />
+              <label htmlFor="axes" style={{ color: '#666', fontSize: 10, cursor: 'pointer' }}>Axes guide</label>
+            </div>
             <div style={s.sectionLabel}>Camera</div>
             {['X', 'Y', 'Z'].map((ax, ai) => (
               <Knob key={ax} label={ax} step={0.1}
@@ -313,6 +332,18 @@ export default function RockReveal() {
             <Knob label="R" step={0.05} value={matSettings.sheenRoughness} onChange={(v) => setMatKey('sheenRoughness', v)} />
             <div style={s.sectionLabel}>Iridescence</div>
             <Knob label="I" step={0.05} value={matSettings.iridescence}   onChange={(v) => setMatKey('iridescence', v)} />
+          </div>
+
+          <div style={s.group}>
+            <div style={s.groupHeader}><span style={s.label}>Color Grade</span></div>
+            <div style={s.sectionLabel}>Exposure</div>
+            <Knob label="E" step={0.05} value={grade.exposure}    onChange={(v) => setGradeKey('exposure', v)} />
+            <div style={s.sectionLabel}>Hue / Sat</div>
+            <Knob label="H" step={0.01} value={grade.hue}        onChange={(v) => setGradeKey('hue', v)} />
+            <Knob label="S" step={0.05} value={grade.saturation} onChange={(v) => setGradeKey('saturation', v)} />
+            <div style={s.sectionLabel}>Brightness / Contrast</div>
+            <Knob label="B" step={0.02} value={grade.brightness} onChange={(v) => setGradeKey('brightness', v)} />
+            <Knob label="C" step={0.02} value={grade.contrast}   onChange={(v) => setGradeKey('contrast', v)} />
           </div>
 
           <div style={s.group}>
