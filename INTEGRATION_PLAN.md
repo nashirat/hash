@@ -1,3 +1,54 @@
+# 3D Scene → UI Repo Integration Plan
+
+## Context
+
+We are integrating a R3F 3D flower scene (from `hashgraph/`) into the UI landing page repo (`ui-repo/`). The UI repo is the **target** — all work happens inside it.
+
+The scene sits **fullscreen behind** the UI (fixed, z-0). The UI (topbar, bottombar, text, preloader) sits **on top** (z-10+).
+
+---
+
+## Step 1 — Install missing packages
+
+UI repo already has: `@react-three/fiber`, `@react-three/drei`, `leva`, `three`
+
+Add what's missing:
+
+```bash
+npm install @react-three/postprocessing postprocessing draco3d
+```
+
+> `postprocessing` — custom GLSL color grade effect  
+> `@react-three/postprocessing` — EffectComposer, SMAA wrappers  
+> `draco3d` — for draco-compressed GLB decoding (kiri.glb, kanan.glb)
+
+---
+
+## Step 2 — Copy GLB assets
+
+Copy these 3 files from `hashgraph/public/` into `ui-repo/public/`:
+
+- `fullcomp.glb`
+- `kiri.glb`
+- `kanan.glb`
+
+```bash
+cp hashgraph/public/fullcomp.glb ui-repo/public/
+cp hashgraph/public/kiri.glb     ui-repo/public/
+cp hashgraph/public/kanan.glb    ui-repo/public/
+```
+
+---
+
+## Step 3 — Create the scene file
+
+Create `ui-repo/src/Scene3D.tsx` with the content below.
+
+> Named `Scene3D` to avoid collision with existing `ui-repo/src/Scene.tsx`.  
+> `// @ts-nocheck` at top — file is JS-style, no type annotations needed yet.
+
+```tsx
+// @ts-nocheck
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, useGLTF, TransformControls, GizmoHelper, GizmoViewport } from '@react-three/drei';
@@ -85,7 +136,6 @@ const KIRI_IDX     = 2;
 const KANAN_IDX    = 3;
 
 // ── Model ─────────────────────────────────────────────────────────────────────
-// meshMultMap: { nodeName: 'branch' | 'flower' } — controls per-mesh sway amplitude
 function Model({ position, rotation, selected, onSelect, groupRef, anisotropy,
                  roughness, metalness, clearcoat, clearcoatRoughness, sheen, sheenRoughness,
                  swayRef, glbPath, meshMultMap }) {
@@ -104,7 +154,6 @@ function Model({ position, rotation, selected, onSelect, groupRef, anisotropy,
     scene.position.sub(center);
     scene.updateMatrixWorld(true);
 
-    // shared world-space pivot: bottom-center of entire scene
     const worldPivot = new THREE.Vector3(0, box.min.y - center.y, 0);
 
     const seen = new Set();
@@ -123,9 +172,7 @@ function Model({ position, rotation, selected, onSelect, groupRef, anisotropy,
         }
       });
 
-      // convert shared world pivot to this mesh's local space
       const localPivot = c.worldToLocal(worldPivot.clone());
-      // amplitude multiplier via meshMultMap
       const partKey = meshMultMap?.[c.name] ?? 'flower';
       const multRef = partKey === 'branch' ? swayRef.current.branchMult : swayRef.current.flowerMult;
 
@@ -207,7 +254,7 @@ function DirLight({ groupRef, position, color, intensity, shadowIntensity,
 }
 
 // ── Main Scene ────────────────────────────────────────────────────────────────
-export default function Scene() {
+export default function Scene3D() {
   const [positions, setPositions] = useState([
     [0.09948271227865446, -0.7613390885327538, 0],                        // fullcomp
     [1.5494332350434508, -0.7042463700944723, 1.2594799824242129],        // dirlight
@@ -229,8 +276,6 @@ export default function Scene() {
   const kananRef      = useRef(null);
   const dirLightRef   = useRef(null);
   const lastDragRef   = useRef(null);
-  const historyRef    = useRef([]);
-  const historyIdxRef = useRef(-1);
   const swayRef       = useRef({ x: { value: 0 }, z: { value: 0 }, branchMult: { value: 1.0 }, flowerMult: { value: 0.6 } });
 
   const [{ toneMapping, exposure, saturation, brightness, contrast,
@@ -258,7 +303,7 @@ export default function Scene() {
     }),
     Model: folder({
       fov:                { label: 'FOV',               value: 45,  min: 10, max: 120, step: 1    },
-      anisotropy:         { label: 'Anisotropy',       value: 16,  options: [1, 2, 4, 8, 16]    },
+      anisotropy:         { label: 'Anisotropy',        value: 16,  options: [1, 2, 4, 8, 16]    },
       roughness:          { label: 'Roughness',         value: 1,   min: 0, max: 1, step: 0.01  },
       metalness:          { label: 'Metalness',         value: 0,   min: 0, max: 1, step: 0.01  },
       clearcoat:          { label: 'Clearcoat',         value: 0,   min: 0, max: 1, step: 0.01  },
@@ -338,62 +383,22 @@ export default function Scene() {
       },
     }),
     Sway: folder({
-      swayWind:       { label: 'Wind Amp',       value: 0.018, min: 0,   max: 0.15, step: 0.001 },
-      swaySpeed:      { label: 'Wind Speed',     value: 1.0,   min: 0,   max: 4,    step: 0.01  },
-      swayBranchMult: { label: 'Branch Mult',    value: 1.0,   min: 0,   max: 3,    step: 0.01  },
-      swayFlowerMult: { label: 'Flower Mult',    value: 0.6,   min: 0,   max: 3,    step: 0.01  },
+      swayWind:       { label: 'Wind Amp',    value: 0.018, min: 0, max: 0.15, step: 0.001 },
+      swaySpeed:      { label: 'Wind Speed',  value: 1.0,   min: 0, max: 4,    step: 0.01  },
+      swayBranchMult: { label: 'Branch Mult', value: 1.0,   min: 0, max: 3,    step: 0.01  },
+      swayFlowerMult: { label: 'Flower Mult', value: 0.6,   min: 0, max: 3,    step: 0.01  },
     }),
   }));
 
-  // sync leva mult sliders → swayRef (live, reactive)
   useEffect(() => { swayRef.current.branchMult.value = swayBranchMult; }, [swayBranchMult]);
   useEffect(() => { swayRef.current.flowerMult.value = swayFlowerMult; }, [swayFlowerMult]);
 
-  // ── History helpers ──────────────────────────────────────────────────────────
-  function pushHistory(newPositions, newRotations) {
-    const stack = historyRef.current;
-    // trim redo branch
-    stack.splice(historyIdxRef.current + 1);
-    stack.push({ positions: newPositions.map(p => [...p]), rotations: newRotations.map(r => [...r]) });
-    if (stack.length > 50) stack.shift();
-    historyIdxRef.current = stack.length - 1;
-  }
-
-  function applySnapshot(snap) {
-    setPositions(snap.positions);
-    setRotations(snap.rotations);
-    const [mx, my, mz]       = snap.positions[MODEL_IDX];
-    const [rx, ry, rz]       = snap.rotations[0];
-    const [lx, ly, lz]       = snap.positions[DIRLIGHT_IDX];
-    const [kix, kiy, kiz]    = snap.positions[KIRI_IDX];
-    const [krx, kry, krz]    = snap.rotations[1];
-    const [knx, kny, knz]    = snap.positions[KANAN_IDX];
-    const [knrx, knry, knrz] = snap.rotations[2];
-    set({
-      modelPos: { x: mx,  y: my,  z: mz  },
-      modelRot: { x: rx,  y: ry,  z: rz  },
-      dlPos:    { x: lx,  y: ly,  z: lz  },
-      kiriPos:  { x: kix, y: kiy, z: kiz },
-      kiriRot:  { x: krx, y: kry, z: krz },
-      kananPos: { x: knx, y: kny, z: knz },
-      kananRot: { x: knrx, y: knry, z: knrz },
-    });
-  }
-
-  // push initial snapshot once
-  useEffect(() => {
-    pushHistory(positions, rotations);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Middle-click → reset camera
   useEffect(() => {
     const onMid = (e) => { if (e.button === 1) { e.preventDefault(); orbitRef.current?.reset(); } };
     window.addEventListener('mousedown', onMid);
     return () => window.removeEventListener('mousedown', onMid);
   }, []);
 
-  // W / E / R + Ctrl+Z/Y hotkeys
   useEffect(() => {
     const onKey = (e) => {
       if (e.target?.tagName === 'INPUT') return;
@@ -401,26 +406,11 @@ export default function Scene() {
       if (e.key === 'e' || e.key === 'E') { setTcMode('rotate');    set({ tcModeVal: 'rotate' });    }
       if (e.key === 'r' || e.key === 'R') { setTcMode('scale');     set({ tcModeVal: 'scale' });     }
       if (e.key === 'Escape')              setSelected(null);
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        const idx = historyIdxRef.current;
-        if (idx <= 0) return;
-        historyIdxRef.current = idx - 1;
-        applySnapshot(historyRef.current[historyIdxRef.current]);
-      }
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-        e.preventDefault();
-        const idx = historyIdxRef.current;
-        if (idx >= historyRef.current.length - 1) return;
-        historyIdxRef.current = idx + 1;
-        applySnapshot(historyRef.current[historyIdxRef.current]);
-      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [set]);
 
-  // Arrow-key step fix for leva inputs (0.1 per tick)
   useEffect(() => {
     const SMALL = { 'Shadow Blur': 0.01, 'Shadow Bias': 0.01, 'Contrast': 0.01, 'Brightness': 0.01, 'Saturation': 0.01 };
     const onArrow = (e) => {
@@ -445,7 +435,6 @@ export default function Scene() {
     return () => window.removeEventListener('keydown', onArrow, true);
   }, []);
 
-
   const selectedObject = selected === DIRLIGHT_IDX
     ? dirLightRef.current
     : selected === MODEL_IDX
@@ -457,44 +446,7 @@ export default function Scene() {
     : null;
 
   return (
-    <div style={{ width: '100vw', height: '100vh', background: '#000' }}>
-      <div style={hudStyle}>
-        {selected === null
-          ? 'Click to select  ·  Esc deselect'
-          : 'W move  ·  E rotate  ·  R scale  ·  Esc deselect'}
-      </div>
-      <button
-        style={btnStyle}
-        onClick={() => {
-          const [mx, my, mz]     = positions[MODEL_IDX];
-          const [rx, ry, rz]     = rotations[0];
-          const [lx, ly, lz]     = positions[DIRLIGHT_IDX];
-          const [kix, kiy, kiz]  = positions[KIRI_IDX];
-          const [krx, kry, krz]  = rotations[1];
-          const [knx, kny, knz]  = positions[KANAN_IDX];
-          const [knrx, knry, knrz] = rotations[2];
-          const vals = {
-            toneMapping, exposure, saturation, brightness, contrast,
-            fov, anisotropy, roughness, metalness, clearcoat, clearcoatRoughness, sheen, sheenRoughness,
-            modelPos: { x: mx, y: my, z: mz },
-            modelRot: { x: rx, y: ry, z: rz },
-            kiriPos:  { x: kix, y: kiy, z: kiz },
-            kiriRot:  { x: krx, y: kry, z: krz },
-            kananPos: { x: knx, y: kny, z: knz },
-            kananRot: { x: knrx, y: knry, z: knrz },
-            dlPos: { x: lx, y: ly, z: lz },
-            dlIntensity, dlColor, dlShadow,
-            dlTarget, shadowRes,
-            hemiSky, hemiGround, hemiIntensity,
-          };
-          navigator.clipboard.writeText(JSON.stringify(vals, null, 2)).then(() => {
-            const btn = document.activeElement;
-            const prev = btn.textContent;
-            btn.textContent = 'Copied!';
-            setTimeout(() => { btn.textContent = prev; }, 1200);
-          });
-        }}
-      >Export Values</button>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: '#000' }}>
       <Canvas
         shadows={{ type: THREE.PCFSoftShadowMap }}
         camera={{ position: [0, 0, 6], fov: 45 }}
@@ -593,35 +545,25 @@ export default function Scene() {
               if (orbitRef.current) orbitRef.current.enabled = true;
               const d = lastDragRef.current;
               if (!d) return;
-              let newPositions = positions.map(p => [...p]);
-              let newRotations = rotations.map(r => [...r]);
               if (d.type === 'light') {
-                newPositions[DIRLIGHT_IDX] = [d.x, d.y, d.z];
-                setPositions(newPositions);
+                setPositions(prev => prev.map((pos, i) => i === DIRLIGHT_IDX ? [d.x, d.y, d.z] : pos));
                 set({ dlPos: { x: d.x, y: d.y, z: d.z } });
               } else if (d.type === 'model') {
-                newPositions[MODEL_IDX] = [d.px, d.py, d.pz];
-                newRotations[0]         = [d.rx, d.ry, d.rz];
-                setPositions(newPositions);
-                setRotations(newRotations);
+                setPositions(prev => prev.map((pos, i) => i === MODEL_IDX ? [d.px, d.py, d.pz] : pos));
+                setRotations(r => r.map((rot, i) => i === 0 ? [d.rx, d.ry, d.rz] : rot));
                 set({ modelPos: { x: d.px, y: d.py, z: d.pz } });
                 set({ modelRot: { x: d.rx, y: d.ry, z: d.rz } });
               } else if (d.type === 'kiri') {
-                newPositions[KIRI_IDX] = [d.px, d.py, d.pz];
-                newRotations[1]        = [d.rx, d.ry, d.rz];
-                setPositions(newPositions);
-                setRotations(newRotations);
+                setPositions(prev => prev.map((pos, i) => i === KIRI_IDX ? [d.px, d.py, d.pz] : pos));
+                setRotations(r => r.map((rot, i) => i === 1 ? [d.rx, d.ry, d.rz] : rot));
                 set({ kiriPos: { x: d.px, y: d.py, z: d.pz } });
                 set({ kiriRot: { x: d.rx, y: d.ry, z: d.rz } });
               } else if (d.type === 'kanan') {
-                newPositions[KANAN_IDX] = [d.px, d.py, d.pz];
-                newRotations[2]         = [d.rx, d.ry, d.rz];
-                setPositions(newPositions);
-                setRotations(newRotations);
+                setPositions(prev => prev.map((pos, i) => i === KANAN_IDX ? [d.px, d.py, d.pz] : pos));
+                setRotations(r => r.map((rot, i) => i === 2 ? [d.rx, d.ry, d.rz] : rot));
                 set({ kananPos: { x: d.px, y: d.py, z: d.pz } });
                 set({ kananRot: { x: d.rx, y: d.ry, z: d.rz } });
               }
-              pushHistory(newPositions, newRotations);
               lastDragRef.current = null;
             }}
           />
@@ -639,18 +581,75 @@ export default function Scene() {
     </div>
   );
 }
+```
 
-const hudStyle = {
-  position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)',
-  background: 'rgba(0,0,0,0.65)', color: '#c4b5fd', fontFamily: 'monospace',
-  fontSize: 11, padding: '6px 14px', borderRadius: 6,
-  pointerEvents: 'none', zIndex: 10, letterSpacing: 0.5, whiteSpace: 'nowrap',
-};
+---
 
-const btnStyle = {
-  position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)',
-  background: 'rgba(0,0,0,0.65)', color: '#c4b5fd', fontFamily: 'monospace',
-  fontSize: 11, padding: '6px 14px', borderRadius: 6,
-  border: '1px solid rgba(196,181,253,0.3)', cursor: 'pointer',
-  zIndex: 10, letterSpacing: 0.5,
-};
+## Step 4 — Mount scene in index route
+
+In `src/routes/index.tsx`, add `Scene3D` as the fixed background layer.
+
+Find the `RouteComponent` return and add `<Scene3D />` as the first child:
+
+```tsx
+import Scene3D from '@/Scene3D'
+
+// Inside RouteComponent return:
+return (
+  <>
+    <Scene3D />
+    <div className="relative flex h-full w-full flex-col justify-between" style={{ zIndex: 10 }}>
+      {/* ... existing UI content ... */}
+    </div>
+  </>
+)
+```
+
+> The UI wrapper needs `zIndex: 10` (or Tailwind `z-10`) so it sits above the canvas.  
+> `pointer-events: none` on non-interactive UI elements prevents blocking canvas interaction.
+
+---
+
+## Step 5 — Verify vite.config.ts (no changes needed)
+
+The UI repo vite config already handles everything. No changes needed for the 3D scene — drei loads draco decoder from CDN by default.
+
+If you want local draco decoder (faster, offline-capable), add to `vite.config.ts`:
+
+```ts
+// Optional: copy draco decoder to public
+import { viteStaticCopy } from 'vite-plugin-static-copy'
+
+// in plugins array:
+viteStaticCopy({
+  targets: [{
+    src: 'node_modules/three/examples/jsm/libs/draco/**/*',
+    dest: 'draco'
+  }]
+})
+```
+
+And in app entry before any `useGLTF` call:
+```ts
+import { useGLTF } from '@react-three/drei'
+useGLTF.setDecoderPath('/draco/')
+```
+
+**Skip this for now** — CDN draco works fine in dev.
+
+---
+
+## Step 6 — Check `three` version
+
+UI repo has `three@0.184.0`, our scene was developed on `0.177.0`. No breaking changes between these for our usage. No action needed.
+
+---
+
+## Checklist
+
+- [ ] `npm install @react-three/postprocessing postprocessing draco3d`
+- [ ] Copy `fullcomp.glb`, `kiri.glb`, `kanan.glb` → `public/`
+- [ ] Create `src/Scene3D.tsx` (full file content in Step 3)
+- [ ] Import and mount `<Scene3D />` in `src/routes/index.tsx`
+- [ ] `localStorage.clear()` in browser after first load (clears old leva cache)
+- [ ] Confirm scene renders behind UI
