@@ -209,15 +209,15 @@ function DirLight({ groupRef, position, color, intensity, shadowIntensity,
 // ── Main Scene ────────────────────────────────────────────────────────────────
 export default function Scene() {
   const [positions, setPositions] = useState([
-    [0.09948271227865446, -0.7613390885327538, 0],                        // fullcomp
-    [1.5494332350434508, -0.7042463700944723, 1.2594799824242129],        // dirlight
-    [-4.434882455920719, 1.1253724443364852, 0],                          // kiri
-    [10.694104321521328, -0.5273063106846092, -11.367553468085417],       // kanan
+    [0.5074088878026501, -0.5373811700847073, 0],                         // fullcomp
+    [1.662888982806127, -0.728430989601503, 1.2599660344948158],          // dirlight
+    [-4.438613913524653, 1.1253724443364852, 0],                          // kiri
+    [10.108357053876183, -0.6302413794460366, -10.3677992384738],         // kanan
   ]);
   const [rotations, setRotations] = useState([
-    [0, -0.2446801252098483, 0],                                          // fullcomp
+    [0.02913724138516111, -0.3351704899357909, -0.016084677765577204],    // fullcomp
     [0.4087769998130987, 0.11085110653122913, -0.17119587747896559],      // kiri
-    [0, -0.7040454240681647, 0],                                          // kanan
+    [0.008516537299090172, -0.6935727097241621, -0.13142840110837334],    // kanan
   ]);
   const [selected, setSelected] = useState(null);
   const [tcMode, setTcMode]     = useState('translate');
@@ -251,10 +251,10 @@ export default function Scene() {
         'Cineon':      THREE.CineonToneMapping,
         'None':        THREE.LinearToneMapping,
       }},
-      exposure:    { label: 'Exposure',    value: 2.62, min: 0,  max: 10, step: 0.01 },
-      saturation:  { label: 'Saturation',  value: 1.18, min: 0,  max: 3,  step: 0.01 },
+      exposure:    { label: 'Exposure',    value: 3.5,  min: 0,  max: 10, step: 0.01 },
+      saturation:  { label: 'Saturation',  value: 1.15, min: 0,  max: 3,  step: 0.01 },
       brightness:  { label: 'Brightness',  value: 0,    min: -1, max: 1,  step: 0.01 },
-      contrast:    { label: 'Contrast',    value: 0.01, min: -1, max: 1,  step: 0.01 },
+      contrast:    { label: 'Contrast',    value: 0.1,  min: -1, max: 1,  step: 0.01 },
     }),
     Model: folder({
       fov:                { label: 'FOV',               value: 45,  min: 10, max: 120, step: 1    },
@@ -266,14 +266,14 @@ export default function Scene() {
       sheen:              { label: 'Sheen',             value: 0,   min: 0, max: 1, step: 0.01  },
       sheenRoughness:     { label: 'Sheen Roughness',   value: 0.5, min: 0, max: 1, step: 0.01  },
       modelPos: {
-        label: 'Position', value: { x: 0.09948271227865446, y: -0.7613390885327538, z: 0 }, step: 0.01,
+        label: 'Position', value: { x: 0.5074088878026501, y: -0.5373811700847073, z: 0 }, step: 0.01,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setPositions(p => p.map((pos, i) => i === MODEL_IDX ? [v.x, v.y, v.z] : pos));
         },
       },
       modelRot: {
-        label: 'Rotation', value: { x: 0, y: -0.2446801252098483, z: 0 }, step: 0.01,
+        label: 'Rotation', value: { x: 0.02913724138516111, y: -0.3351704899357909, z: -0.016084677765577204 }, step: 0.01,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setRotations(r => r.map((rot, i) => i === 0 ? [v.x, v.y, v.z] : rot));
@@ -282,7 +282,7 @@ export default function Scene() {
     }),
     Kiri: folder({
       kiriPos: {
-        label: 'Position', value: { x: -4.434882455920719, y: 1.1253724443364852, z: 0 }, step: 0.01,
+        label: 'Position', value: { x: -4.438613913524653, y: 1.1253724443364852, z: 0 }, step: 0.01,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setPositions(p => p.map((pos, i) => i === KIRI_IDX ? [v.x, v.y, v.z] : pos));
@@ -298,14 +298,14 @@ export default function Scene() {
     }),
     Kanan: folder({
       kananPos: {
-        label: 'Position', value: { x: 10.694104321521328, y: -0.5273063106846092, z: -11.367553468085417 }, step: 0.01,
+        label: 'Position', value: { x: 10.108357053876183, y: -0.6302413794460366, z: -10.3677992384738 }, step: 0.01,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setPositions(p => p.map((pos, i) => i === KANAN_IDX ? [v.x, v.y, v.z] : pos));
         },
       },
       kananRot: {
-        label: 'Rotation', value: { x: 0, y: -0.7040454240681647, z: 0 }, step: 0.01,
+        label: 'Rotation', value: { x: 0.008516537299090172, y: -0.6935727097241621, z: -0.13142840110837334 }, step: 0.01,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setRotations(r => r.map((rot, i) => i === 2 ? [v.x, v.y, v.z] : rot));
@@ -314,7 +314,7 @@ export default function Scene() {
     }),
     'Dir Light': folder({
       dlPos: {
-        label: 'Position', value: { x: 1.5494332350434508, y: -0.7042463700944723, z: 1.2594799824242129 }, step: 0.1,
+        label: 'Position', value: { x: 1.662888982806127, y: -0.728430989601503, z: 1.2599660344948158 }, step: 0.1,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setPositions(p => p.map((pos, i) => i === DIRLIGHT_IDX ? [v.x, v.y, v.z] : pos));
@@ -329,7 +329,7 @@ export default function Scene() {
     'Hemi Light': folder({
       hemiSky:       { label: 'Sky',       value: '#ffffff'                                },
       hemiGround:    { label: 'Ground',    value: '#000000'                                },
-      hemiIntensity: { label: 'Intensity', value: 0.35,    min: 0, max: 5,   step: 0.01  },
+      hemiIntensity: { label: 'Intensity', value: 0.3,     min: 0, max: 5,   step: 0.01  },
     }),
     Transform: folder({
       tcModeVal: {
