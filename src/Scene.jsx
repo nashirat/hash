@@ -7,6 +7,22 @@ import { Uniform } from 'three';
 import { useControls, folder } from 'leva';
 import * as THREE from 'three';
 
+// ── Sway Update (inside Canvas) ───────────────────────────────────────────────
+function SwayUpdate({ swayRef, windAmp, windSpeed }) {
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime * windSpeed * 0.35;
+    const wind = (
+      Math.sin(t) +
+      Math.sin(t * 1.37 + 1.5) * 0.22 +
+      Math.sin(t * 2.71 + 3.1) * 0.06
+    ) * windAmp;
+    const mod = Math.sin(t * 0.18) * 0.15 + 0.85;
+    swayRef.current.x.value = wind * mod;
+    swayRef.current.z.value = Math.sin(t * 0.79 + 0.9) * windAmp * 0.08 * mod;
+  });
+  return null;
+}
+
 // ── Color Grade Effect ────────────────────────────────────────────────────────
 class ColorGradeImpl extends Effect {
   constructor() {
@@ -60,14 +76,20 @@ function ToneMappingSetup({ type }) {
 }
 
 useGLTF.preload('/fullcomp.glb');
+useGLTF.preload('/kiri.glb');
+useGLTF.preload('/kanan.glb');
 
-const MODEL_IDX   = 0;
+const MODEL_IDX    = 0;
 const DIRLIGHT_IDX = 1;
+const KIRI_IDX     = 2;
+const KANAN_IDX    = 3;
 
 // ── Model ─────────────────────────────────────────────────────────────────────
+// meshMultMap: { nodeName: 'branch' | 'flower' } — controls per-mesh sway amplitude
 function Model({ position, rotation, selected, onSelect, groupRef, anisotropy,
-                 roughness, metalness, clearcoat, clearcoatRoughness, sheen, sheenRoughness }) {
-  const { scene } = useGLTF('/fullcomp.glb');
+                 roughness, metalness, clearcoat, clearcoatRoughness, sheen, sheenRoughness,
+                 swayRef, glbPath, meshMultMap }) {
+  const { scene } = useGLTF(glbPath);
   const { gl } = useThree();
   const ready = useRef(false);
   const texturesRef = useRef([]);
@@ -78,7 +100,12 @@ function Model({ position, rotation, selected, onSelect, groupRef, anisotropy,
     ready.current = true;
 
     const box = new THREE.Box3().setFromObject(scene);
-    scene.position.sub(box.getCenter(new THREE.Vector3()));
+    const center = box.getCenter(new THREE.Vector3());
+    scene.position.sub(center);
+    scene.updateMatrixWorld(true);
+
+    // shared world-space pivot: bottom-center of entire scene
+    const worldPivot = new THREE.Vector3(0, box.min.y - center.y, 0);
 
     const seen = new Set();
     const textures = [];
@@ -95,10 +122,35 @@ function Model({ position, rotation, selected, onSelect, groupRef, anisotropy,
           textures.push(v);
         }
       });
+
+      // convert shared world pivot to this mesh's local space
+      const localPivot = c.worldToLocal(worldPivot.clone());
+      // amplitude multiplier via meshMultMap
+      const partKey = meshMultMap?.[c.name] ?? 'flower';
+      const multRef = partKey === 'branch' ? swayRef.current.branchMult : swayRef.current.flowerMult;
+
+      const mat = c.material;
+      mat.onBeforeCompile = (shader) => {
+        shader.uniforms.uSwayX    = swayRef.current.x;
+        shader.uniforms.uSwayZ    = swayRef.current.z;
+        shader.uniforms.uSwayMult = multRef;
+        shader.uniforms.uSwayPivot = { value: localPivot };
+        shader.vertexShader =
+          `uniform float uSwayX;\nuniform float uSwayZ;\nuniform float uSwayMult;\nuniform vec3 uSwayPivot;\n`
+          + shader.vertexShader.replace(
+            '#include <begin_vertex>',
+            `float _angle = length(vec2(uSwayX, uSwayZ)) * uSwayMult;
+vec3 _axis = (_angle > 0.0001) ? normalize(vec3(-uSwayZ, 0.0, uSwayX)) : vec3(0.0, 0.0, 1.0);
+vec3 _rel = position - uSwayPivot;
+float _c = cos(_angle); float _s = sin(_angle);
+vec3 transformed = _rel * _c + cross(_axis, _rel) * _s + _axis * dot(_axis, _rel) * (1.0 - _c) + uSwayPivot;`
+          );
+      };
+      mat.needsUpdate = true;
     });
     texturesRef.current = textures;
     matsRef.current = mats;
-  }, [scene, gl]);
+  }, [scene, gl, swayRef]);
 
   useEffect(() => {
     const maxAniso = gl.capabilities.getMaxAnisotropy();
@@ -125,24 +177,13 @@ function Model({ position, rotation, selected, onSelect, groupRef, anisotropy,
   );
 }
 
-// ── Directional Light (grabbable) ─────────────────────────────────────────────
+// ── Directional Light (grabbable) ────────────────────────────────────────────
 function DirLight({ groupRef, position, color, intensity, shadowIntensity,
-                    target, shadowRes,
+                    shadowRes, target,
                     selected, onSelect }) {
-  const lightRef = useRef();
-
-  useEffect(() => {
-    const light = lightRef.current;
-    if (!light) return;
-    light.target.position.set(target.x, target.y, target.z);
-    light.target.updateMatrixWorld();
-  }, [target]);
-
-
   return (
     <group ref={groupRef} position={position}>
       <directionalLight
-        ref={lightRef}
         color={color}
         intensity={intensity}
         castShadow
@@ -151,17 +192,12 @@ function DirLight({ groupRef, position, color, intensity, shadowIntensity,
         shadow-bias={-0.0005}
         shadow-camera-near={0.1}
         shadow-camera-far={50}
-        shadow-camera-left={-8}
-        shadow-camera-right={8}
-        shadow-camera-top={8}
-        shadow-camera-bottom={-8}
+        target-position={[target?.x ?? 0, target?.y ?? 0, target?.z ?? 0]}
       />
-      {/* visible marker */}
       <mesh renderOrder={999}>
         <sphereGeometry args={[0.15, 16, 16]} />
         <meshBasicMaterial color={selected ? '#ffffff' : '#ffe566'} depthTest={false} />
       </mesh>
-      {/* larger invisible hit area */}
       <mesh onClick={(e) => { e.stopPropagation(); onSelect(); }}>
         <sphereGeometry args={[0.5, 8, 8]} />
         <meshBasicMaterial visible={false} />
@@ -173,18 +209,27 @@ function DirLight({ groupRef, position, color, intensity, shadowIntensity,
 // ── Main Scene ────────────────────────────────────────────────────────────────
 export default function Scene() {
   const [positions, setPositions] = useState([
-    [0.17304607431398566, -0.7613390885327538, 0],    // model
-    [1.781808006964472, -0.519731925338406, 0.1333767540734203],    // dirlight
+    [0.09948271227865446, -0.7613390885327538, 0],                        // fullcomp
+    [1.6563406287637856, -0.5124859406013547, 1.3800263067216396],        // dirlight
+    [-4.2275190627220915, 0.24783553448404338, 0],                        // kiri
+    [8.32196218234657, -0.76, -11.367553468085417],                       // kanan
   ]);
-  const [rotations, setRotations] = useState([[0, -0.29330542185368386, 0]]);
-  const [selected, setSelected]   = useState(null);
-  const [tcMode, setTcMode]       = useState('translate');
-  const [isDragging, setIsDragging] = useState(false);
+  const [rotations, setRotations] = useState([
+    [0, -0.2446801252098483, 0],                                          // fullcomp
+    [0.013708394273127152, 0.06546152696165551, -0.1897699151722256],     // kiri
+    [0, -0.5960777643304127, 0],                                          // kanan
+  ]);
+  const [selected, setSelected] = useState(null);
+  const [tcMode, setTcMode]     = useState('translate');
 
-  const orbitRef    = useRef(null);
-  const tcRef       = useRef(null);
-  const modelRef    = useRef(null);
-  const dirLightRef = useRef(null);
+  const orbitRef      = useRef(null);
+  const tcRef         = useRef(null);
+  const modelRef      = useRef(null);
+  const kiriRef       = useRef(null);
+  const kananRef      = useRef(null);
+  const dirLightRef   = useRef(null);
+  const lastDragRef   = useRef(null);
+  const swayRef       = useRef({ x: { value: 0 }, z: { value: 0 }, branchMult: { value: 1.0 }, flowerMult: { value: 0.6 } });
 
   const [{ toneMapping, exposure, saturation, brightness, contrast,
            fov, modelPos, modelRot, anisotropy,
@@ -192,7 +237,9 @@ export default function Scene() {
            dlPos, dlIntensity, dlColor, dlShadow,
            dlTarget, shadowRes,
            hemiSky, hemiGround, hemiIntensity,
-           tcModeVal }, set] = useControls(() => ({
+           tcModeVal,
+           swayWind, swaySpeed, swayBranchMult, swayFlowerMult,
+           kiriPos, kiriRot, kananPos, kananRot }, set] = useControls(() => ({
     Render: folder({
       toneMapping: { label: 'Tone Mapping', value: THREE.ACESFilmicToneMapping, options: {
         'ACES Filmic': THREE.ACESFilmicToneMapping,
@@ -217,33 +264,65 @@ export default function Scene() {
       sheen:              { label: 'Sheen',             value: 0,   min: 0, max: 1, step: 0.01  },
       sheenRoughness:     { label: 'Sheen Roughness',   value: 0.5, min: 0, max: 1, step: 0.01  },
       modelPos: {
-        label: 'Position', value: { x: 0.17304607431398566, y: -0.7613390885327538, z: 0 }, step: 0.01,
+        label: 'Position', value: { x: 0.09948271227865446, y: -0.7613390885327538, z: 0 }, step: 0.01,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setPositions(p => p.map((pos, i) => i === MODEL_IDX ? [v.x, v.y, v.z] : pos));
         },
       },
       modelRot: {
-        label: 'Rotation', value: { x: 0, y: -0.29330542185368386, z: 0 }, step: 0.01,
+        label: 'Rotation', value: { x: 0, y: -0.2446801252098483, z: 0 }, step: 0.01,
         onChange: (v, _, { initial }) => {
           if (initial) return;
-          setRotations([[v.x, v.y, v.z]]);
+          setRotations(r => r.map((rot, i) => i === 0 ? [v.x, v.y, v.z] : rot));
+        },
+      },
+    }),
+    Kiri: folder({
+      kiriPos: {
+        label: 'Position', value: { x: -4.2275190627220915, y: 0.24783553448404338, z: 0 }, step: 0.01,
+        onChange: (v, _, { initial }) => {
+          if (initial) return;
+          setPositions(p => p.map((pos, i) => i === KIRI_IDX ? [v.x, v.y, v.z] : pos));
+        },
+      },
+      kiriRot: {
+        label: 'Rotation', value: { x: 0.013708394273127152, y: 0.06546152696165551, z: -0.1897699151722256 }, step: 0.01,
+        onChange: (v, _, { initial }) => {
+          if (initial) return;
+          setRotations(r => r.map((rot, i) => i === 1 ? [v.x, v.y, v.z] : rot));
+        },
+      },
+    }),
+    Kanan: folder({
+      kananPos: {
+        label: 'Position', value: { x: 8.32196218234657, y: -0.76, z: -11.367553468085417 }, step: 0.01,
+        onChange: (v, _, { initial }) => {
+          if (initial) return;
+          setPositions(p => p.map((pos, i) => i === KANAN_IDX ? [v.x, v.y, v.z] : pos));
+        },
+      },
+      kananRot: {
+        label: 'Rotation', value: { x: 0, y: -0.5960777643304127, z: 0 }, step: 0.01,
+        onChange: (v, _, { initial }) => {
+          if (initial) return;
+          setRotations(r => r.map((rot, i) => i === 2 ? [v.x, v.y, v.z] : rot));
         },
       },
     }),
     'Dir Light': folder({
       dlPos: {
-        label: 'Position', value: { x: 1.781808006964472, y: -0.519731925338406, z: 0.1333767540734203 }, step: 0.1,
+        label: 'Position', value: { x: 1.6563406287637856, y: -0.5124859406013547, z: 1.3800263067216396 }, step: 0.1,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setPositions(p => p.map((pos, i) => i === DIRLIGHT_IDX ? [v.x, v.y, v.z] : pos));
         },
       },
-      dlIntensity:   { label: 'Intensity',     value: 2,                   min: 0,    max: 20,   step: 0.1    },
-      dlColor:       { label: 'Color',         value: '#ffffff'                                               },
-      dlShadow:      { label: 'Shadow',        value: 1,                   min: 0,    max: 1,    step: 0.01   },
-      dlTarget:      { label: 'Target',        value: { x: 0, y: 0, z: 0 },                     step: 0.1    },
-      shadowRes:     { label: 'Shadow Res',    value: 2048,                options: [512, 1024, 2048, 4096]   },
+      dlIntensity: { label: 'Intensity',  value: 2,     min: 0, max: 20,   step: 0.1  },
+      dlColor:     { label: 'Color',      value: '#ffffff'                              },
+      dlShadow:    { label: 'Shadow',     value: 1,     min: 0, max: 1,    step: 0.01  },
+      dlTarget:    { label: 'Target',     value: { x: 0, y: 0, z: 0 },    step: 0.1   },
+      shadowRes:   { label: 'Shadow Res', value: 2048,  options: [512, 1024, 2048, 4096] },
     }),
     'Hemi Light': folder({
       hemiSky:       { label: 'Sky',       value: '#ffffff'                                },
@@ -256,7 +335,17 @@ export default function Scene() {
         onChange: (v, _, { initial }) => { if (!initial) setTcMode(v); },
       },
     }),
+    Sway: folder({
+      swayWind:       { label: 'Wind Amp',       value: 0.018, min: 0,   max: 0.15, step: 0.001 },
+      swaySpeed:      { label: 'Wind Speed',     value: 1.0,   min: 0,   max: 4,    step: 0.01  },
+      swayBranchMult: { label: 'Branch Mult',    value: 1.0,   min: 0,   max: 3,    step: 0.01  },
+      swayFlowerMult: { label: 'Flower Mult',    value: 0.6,   min: 0,   max: 3,    step: 0.01  },
+    }),
   }));
+
+  // sync leva mult sliders → swayRef (live, reactive)
+  useEffect(() => { swayRef.current.branchMult.value = swayBranchMult; }, [swayBranchMult]);
+  useEffect(() => { swayRef.current.flowerMult.value = swayFlowerMult; }, [swayFlowerMult]);
 
   // Middle-click → reset camera
   useEffect(() => {
@@ -303,44 +392,15 @@ export default function Scene() {
     return () => window.removeEventListener('keydown', onArrow, true);
   }, []);
 
-  // TransformControls — orbit lock + leva sync on drag end
-  useEffect(() => {
-    const tc = tcRef.current;
-    if (!tc) return;
-
-    const onDrag = (e) => {
-      setIsDragging(e.value);
-      if (orbitRef.current) orbitRef.current.enabled = !e.value;
-    };
-
-    const onUp = () => {
-      if (selected === DIRLIGHT_IDX) {
-        const p = dirLightRef.current?.position;
-        if (!p) return;
-        setPositions(prev => prev.map((pos, i) => i === DIRLIGHT_IDX ? [p.x, p.y, p.z] : pos));
-        set({ dlPos: { x: p.x, y: p.y, z: p.z } });
-      } else if (selected === MODEL_IDX) {
-        const g = modelRef.current;
-        if (!g) return;
-        setPositions(prev => prev.map((pos, i) => i === MODEL_IDX ? [g.position.x, g.position.y, g.position.z] : pos));
-        setRotations([[g.rotation.x, g.rotation.y, g.rotation.z]]);
-        set({ modelPos: { x: g.position.x, y: g.position.y, z: g.position.z } });
-        set({ modelRot: { x: g.rotation.x, y: g.rotation.y, z: g.rotation.z } });
-      }
-    };
-
-    tc.addEventListener('dragging-changed', onDrag);
-    tc.addEventListener('mouseUp', onUp);
-    return () => {
-      tc.removeEventListener('dragging-changed', onDrag);
-      tc.removeEventListener('mouseUp', onUp);
-    };
-  }, [selected, set]);
 
   const selectedObject = selected === DIRLIGHT_IDX
     ? dirLightRef.current
     : selected === MODEL_IDX
     ? modelRef.current
+    : selected === KIRI_IDX
+    ? kiriRef.current
+    : selected === KANAN_IDX
+    ? kananRef.current
     : null;
 
   return (
@@ -353,14 +413,22 @@ export default function Scene() {
       <button
         style={btnStyle}
         onClick={() => {
-          const [mx, my, mz] = positions[MODEL_IDX];
-          const [rx, ry, rz] = rotations[0];
-          const [lx, ly, lz] = positions[DIRLIGHT_IDX];
+          const [mx, my, mz]     = positions[MODEL_IDX];
+          const [rx, ry, rz]     = rotations[0];
+          const [lx, ly, lz]     = positions[DIRLIGHT_IDX];
+          const [kix, kiy, kiz]  = positions[KIRI_IDX];
+          const [krx, kry, krz]  = rotations[1];
+          const [knx, kny, knz]  = positions[KANAN_IDX];
+          const [knrx, knry, knrz] = rotations[2];
           const vals = {
             toneMapping, exposure, saturation, brightness, contrast,
             fov, anisotropy, roughness, metalness, clearcoat, clearcoatRoughness, sheen, sheenRoughness,
             modelPos: { x: mx, y: my, z: mz },
             modelRot: { x: rx, y: ry, z: rz },
+            kiriPos:  { x: kix, y: kiy, z: kiz },
+            kiriRot:  { x: krx, y: kry, z: krz },
+            kananPos: { x: knx, y: kny, z: knz },
+            kananRot: { x: knrx, y: knry, z: knrz },
             dlPos: { x: lx, y: ly, z: lz },
             dlIntensity, dlColor, dlShadow,
             dlTarget, shadowRes,
@@ -386,7 +454,7 @@ export default function Scene() {
         <hemisphereLight color={hemiSky} groundColor={hemiGround} intensity={hemiIntensity} />
         <DirLight
           groupRef={dirLightRef}
-          position={isDragging && selected === DIRLIGHT_IDX ? undefined : positions[DIRLIGHT_IDX]}
+          position={positions[DIRLIGHT_IDX]}
           color={dlColor}
           intensity={dlIntensity}
           shadowIntensity={dlShadow}
@@ -395,10 +463,12 @@ export default function Scene() {
           selected={selected === DIRLIGHT_IDX}
           onSelect={() => setSelected(DIRLIGHT_IDX)}
         />
-<Model
+        <Model
           groupRef={modelRef}
-          position={isDragging && selected === MODEL_IDX ? undefined : positions[MODEL_IDX]}
-          rotation={isDragging && selected === MODEL_IDX ? undefined : rotations[MODEL_IDX]}
+          glbPath="/fullcomp.glb"
+          meshMultMap={{ 'Full_Branch': 'branch', 'Full_Petals': 'flower' }}
+          position={positions[MODEL_IDX]}
+          rotation={rotations[MODEL_IDX]}
           anisotropy={anisotropy}
           roughness={roughness}
           metalness={metalness}
@@ -408,10 +478,92 @@ export default function Scene() {
           sheenRoughness={sheenRoughness}
           selected={selected === MODEL_IDX}
           onSelect={() => setSelected(MODEL_IDX)}
+          swayRef={swayRef}
         />
+        <Model
+          groupRef={kiriRef}
+          glbPath="/kiri.glb"
+          meshMultMap={{ 'Orchid Flowers on Branch.002': 'branch', 'Bake 1.001': 'flower' }}
+          position={positions[KIRI_IDX]}
+          rotation={rotations[1]}
+          anisotropy={anisotropy}
+          roughness={roughness}
+          metalness={metalness}
+          clearcoat={clearcoat}
+          clearcoatRoughness={clearcoatRoughness}
+          sheen={sheen}
+          sheenRoughness={sheenRoughness}
+          selected={selected === KIRI_IDX}
+          onSelect={() => setSelected(KIRI_IDX)}
+          swayRef={swayRef}
+        />
+        <Model
+          groupRef={kananRef}
+          glbPath="/kanan.glb"
+          meshMultMap={{ 'Orchid Flowers on Branch.001': 'branch', 'Bake 1.002': 'flower', 'Bake 1.003': 'flower', 'Bake 1.004': 'flower' }}
+          position={positions[KANAN_IDX]}
+          rotation={rotations[2]}
+          anisotropy={anisotropy}
+          roughness={roughness}
+          metalness={metalness}
+          clearcoat={clearcoat}
+          clearcoatRoughness={clearcoatRoughness}
+          sheen={sheen}
+          sheenRoughness={sheenRoughness}
+          selected={selected === KANAN_IDX}
+          onSelect={() => setSelected(KANAN_IDX)}
+          swayRef={swayRef}
+        />
+        <SwayUpdate swayRef={swayRef} windAmp={swayWind} windSpeed={swaySpeed} />
         {selectedObject && (
-          <TransformControls ref={tcRef} object={selectedObject} mode={tcMode} />
+          <TransformControls
+            ref={tcRef}
+            object={selectedObject}
+            mode={tcMode}
+            onObjectChange={() => {
+              if (selected === DIRLIGHT_IDX && dirLightRef.current) {
+                const p = dirLightRef.current.position;
+                lastDragRef.current = { type: 'light', x: p.x, y: p.y, z: p.z };
+              } else if (selected === MODEL_IDX && modelRef.current) {
+                const g = modelRef.current;
+                lastDragRef.current = { type: 'model', px: g.position.x, py: g.position.y, pz: g.position.z, rx: g.rotation.x, ry: g.rotation.y, rz: g.rotation.z };
+              } else if (selected === KIRI_IDX && kiriRef.current) {
+                const g = kiriRef.current;
+                lastDragRef.current = { type: 'kiri', px: g.position.x, py: g.position.y, pz: g.position.z, rx: g.rotation.x, ry: g.rotation.y, rz: g.rotation.z };
+              } else if (selected === KANAN_IDX && kananRef.current) {
+                const g = kananRef.current;
+                lastDragRef.current = { type: 'kanan', px: g.position.x, py: g.position.y, pz: g.position.z, rx: g.rotation.x, ry: g.rotation.y, rz: g.rotation.z };
+              }
+            }}
+            onMouseDown={() => { if (orbitRef.current) orbitRef.current.enabled = false; }}
+            onMouseUp={() => {
+              if (orbitRef.current) orbitRef.current.enabled = true;
+              const d = lastDragRef.current;
+              if (!d) return;
+              if (d.type === 'light') {
+                setPositions(prev => prev.map((pos, i) => i === DIRLIGHT_IDX ? [d.x, d.y, d.z] : pos));
+                set({ dlPos: { x: d.x, y: d.y, z: d.z } });
+              } else if (d.type === 'model') {
+                setPositions(prev => prev.map((pos, i) => i === MODEL_IDX ? [d.px, d.py, d.pz] : pos));
+                setRotations(r => r.map((rot, i) => i === 0 ? [d.rx, d.ry, d.rz] : rot));
+                set({ modelPos: { x: d.px, y: d.py, z: d.pz } });
+                set({ modelRot: { x: d.rx, y: d.ry, z: d.rz } });
+              } else if (d.type === 'kiri') {
+                setPositions(prev => prev.map((pos, i) => i === KIRI_IDX ? [d.px, d.py, d.pz] : pos));
+                setRotations(r => r.map((rot, i) => i === 1 ? [d.rx, d.ry, d.rz] : rot));
+                set({ kiriPos: { x: d.px, y: d.py, z: d.pz } });
+                set({ kiriRot: { x: d.rx, y: d.ry, z: d.rz } });
+              } else if (d.type === 'kanan') {
+                setPositions(prev => prev.map((pos, i) => i === KANAN_IDX ? [d.px, d.py, d.pz] : pos));
+                setRotations(r => r.map((rot, i) => i === 2 ? [d.rx, d.ry, d.rz] : rot));
+                set({ kananPos: { x: d.px, y: d.py, z: d.pz } });
+                set({ kananRot: { x: d.rx, y: d.ry, z: d.rz } });
+              }
+              lastDragRef.current = null;
+            }}
+          />
         )}
+        <axesHelper args={[3]} />
         <OrbitControls ref={orbitRef} makeDefault enableDamping={false} />
         <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
           <GizmoViewport axisColors={['#ff4d6d', '#69db7c', '#4dabf7']} labelColor="white" />
