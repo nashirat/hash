@@ -86,7 +86,7 @@ const KANAN_IDX    = 3;
 
 // ── Model ─────────────────────────────────────────────────────────────────────
 // meshMultMap: { nodeName: 'branch' | 'flower' } — controls per-mesh sway amplitude
-function Model({ position, rotation, selected, onSelect, groupRef, anisotropy,
+function Model({ position, rotation, scale, selected, onSelect, groupRef, anisotropy,
                  roughness, metalness, clearcoat, clearcoatRoughness, sheen, sheenRoughness,
                  swayRef, glbPath, meshMultMap }) {
   const { scene } = useGLTF(glbPath);
@@ -170,6 +170,7 @@ vec3 transformed = _rel * _c + cross(_axis, _rel) * _s + _axis * dot(_axis, _rel
       ref={groupRef}
       position={position}
       rotation={rotation}
+      scale={scale}
       onClick={(e) => { e.stopPropagation(); onSelect(); }}
     >
       <primitive object={scene} />
@@ -219,6 +220,11 @@ export default function Scene() {
     [0.41203814434549135, 0.16486072551020498, -0.194917409168369],       // kiri
     [0.008516537299090172, -0.6935727097241621, -0.13142840110837334],    // kanan
   ]);
+  const [scales, setScales] = useState([
+    [1, 1, 1],   // fullcomp
+    [1, 1, 1],   // kiri
+    [1, 1, 1],   // kanan
+  ]);
   const [selected, setSelected] = useState(null);
   const [tcMode, setTcMode]     = useState('translate');
 
@@ -241,7 +247,8 @@ export default function Scene() {
            hemiSky, hemiGround, hemiIntensity,
            tcModeVal,
            swayWind, swaySpeed, swayBranchMult, swayFlowerMult,
-           kiriPos, kiriRot, kananPos, kananRot }, set] = useControls(() => ({
+           kiriPos, kiriRot, kiriScale, kananPos, kananRot, kananScale,
+           modelScale }, set] = useControls(() => ({
     Render: folder({
       toneMapping: { label: 'Tone Mapping', value: THREE.ACESFilmicToneMapping, options: {
         'ACES Filmic': THREE.ACESFilmicToneMapping,
@@ -279,6 +286,13 @@ export default function Scene() {
           setRotations(r => r.map((rot, i) => i === 0 ? [v.x, v.y, v.z] : rot));
         },
       },
+      modelScale: {
+        label: 'Scale', value: { x: 1, y: 1, z: 1 }, step: 0.01,
+        onChange: (v, _, { initial }) => {
+          if (initial) return;
+          setScales(s => s.map((sc, i) => i === 0 ? [v.x, v.y, v.z] : sc));
+        },
+      },
     }),
     Kiri: folder({
       kiriPos: {
@@ -295,6 +309,13 @@ export default function Scene() {
           setRotations(r => r.map((rot, i) => i === 1 ? [v.x, v.y, v.z] : rot));
         },
       },
+      kiriScale: {
+        label: 'Scale', value: { x: 1, y: 1, z: 1 }, step: 0.01,
+        onChange: (v, _, { initial }) => {
+          if (initial) return;
+          setScales(s => s.map((sc, i) => i === 1 ? [v.x, v.y, v.z] : sc));
+        },
+      },
     }),
     Kanan: folder({
       kananPos: {
@@ -309,6 +330,13 @@ export default function Scene() {
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setRotations(r => r.map((rot, i) => i === 2 ? [v.x, v.y, v.z] : rot));
+        },
+      },
+      kananScale: {
+        label: 'Scale', value: { x: 1, y: 1, z: 1 }, step: 0.01,
+        onChange: (v, _, { initial }) => {
+          if (initial) return;
+          setScales(s => s.map((sc, i) => i === 2 ? [v.x, v.y, v.z] : sc));
         },
       },
     }),
@@ -350,11 +378,14 @@ export default function Scene() {
   useEffect(() => { swayRef.current.flowerMult.value = swayFlowerMult; }, [swayFlowerMult]);
 
   // ── History helpers ──────────────────────────────────────────────────────────
-  function pushHistory(newPositions, newRotations) {
+  function pushHistory(newPositions, newRotations, newScales) {
     const stack = historyRef.current;
-    // trim redo branch
     stack.splice(historyIdxRef.current + 1);
-    stack.push({ positions: newPositions.map(p => [...p]), rotations: newRotations.map(r => [...r]) });
+    stack.push({
+      positions: newPositions.map(p => [...p]),
+      rotations: newRotations.map(r => [...r]),
+      scales: newScales.map(s => [...s]),
+    });
     if (stack.length > 50) stack.shift();
     historyIdxRef.current = stack.length - 1;
   }
@@ -362,27 +393,34 @@ export default function Scene() {
   function applySnapshot(snap) {
     setPositions(snap.positions);
     setRotations(snap.rotations);
+    setScales(snap.scales);
     const [mx, my, mz]       = snap.positions[MODEL_IDX];
     const [rx, ry, rz]       = snap.rotations[0];
+    const [sx, sy, sz]        = snap.scales[0];
     const [lx, ly, lz]       = snap.positions[DIRLIGHT_IDX];
     const [kix, kiy, kiz]    = snap.positions[KIRI_IDX];
     const [krx, kry, krz]    = snap.rotations[1];
+    const [ksx, ksy, ksz]    = snap.scales[1];
     const [knx, kny, knz]    = snap.positions[KANAN_IDX];
     const [knrx, knry, knrz] = snap.rotations[2];
+    const [knsx, knsy, knsz] = snap.scales[2];
     set({
-      modelPos: { x: mx,  y: my,  z: mz  },
-      modelRot: { x: rx,  y: ry,  z: rz  },
-      dlPos:    { x: lx,  y: ly,  z: lz  },
-      kiriPos:  { x: kix, y: kiy, z: kiz },
-      kiriRot:  { x: krx, y: kry, z: krz },
-      kananPos: { x: knx, y: kny, z: knz },
-      kananRot: { x: knrx, y: knry, z: knrz },
+      modelPos:   { x: mx,   y: my,   z: mz   },
+      modelRot:   { x: rx,   y: ry,   z: rz   },
+      modelScale: { x: sx,   y: sy,   z: sz   },
+      dlPos:      { x: lx,   y: ly,   z: lz   },
+      kiriPos:    { x: kix,  y: kiy,  z: kiz  },
+      kiriRot:    { x: krx,  y: kry,  z: krz  },
+      kiriScale:  { x: ksx,  y: ksy,  z: ksz  },
+      kananPos:   { x: knx,  y: kny,  z: knz  },
+      kananRot:   { x: knrx, y: knry, z: knrz },
+      kananScale: { x: knsx, y: knsy, z: knsz },
     });
   }
 
   // push initial snapshot once
   useEffect(() => {
-    pushHistory(positions, rotations);
+    pushHistory(positions, rotations, scales);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -476,12 +514,15 @@ export default function Scene() {
           const vals = {
             toneMapping, exposure, saturation, brightness, contrast,
             fov, anisotropy, roughness, metalness, clearcoat, clearcoatRoughness, sheen, sheenRoughness,
-            modelPos: { x: mx, y: my, z: mz },
-            modelRot: { x: rx, y: ry, z: rz },
-            kiriPos:  { x: kix, y: kiy, z: kiz },
-            kiriRot:  { x: krx, y: kry, z: krz },
-            kananPos: { x: knx, y: kny, z: knz },
-            kananRot: { x: knrx, y: knry, z: knrz },
+            modelPos:   { x: mx, y: my, z: mz },
+            modelRot:   { x: rx, y: ry, z: rz },
+            modelScale: { x: scales[0][0], y: scales[0][1], z: scales[0][2] },
+            kiriPos:    { x: kix, y: kiy, z: kiz },
+            kiriRot:    { x: krx, y: kry, z: krz },
+            kiriScale:  { x: scales[1][0], y: scales[1][1], z: scales[1][2] },
+            kananPos:   { x: knx, y: kny, z: knz },
+            kananRot:   { x: knrx, y: knry, z: knrz },
+            kananScale: { x: scales[2][0], y: scales[2][1], z: scales[2][2] },
             dlPos: { x: lx, y: ly, z: lz },
             dlIntensity, dlColor, dlShadow,
             dlTarget, shadowRes,
@@ -522,6 +563,7 @@ export default function Scene() {
           meshMultMap={{ 'Full_Branch': 'branch', 'Full_Petals': 'flower' }}
           position={positions[MODEL_IDX]}
           rotation={rotations[MODEL_IDX]}
+          scale={scales[0]}
           anisotropy={anisotropy}
           roughness={roughness}
           metalness={metalness}
@@ -539,6 +581,7 @@ export default function Scene() {
           meshMultMap={{ 'Orchid Flowers on Branch.002': 'branch', 'Bake 1.001': 'flower' }}
           position={positions[KIRI_IDX]}
           rotation={rotations[1]}
+          scale={scales[1]}
           anisotropy={anisotropy}
           roughness={roughness}
           metalness={metalness}
@@ -556,6 +599,7 @@ export default function Scene() {
           meshMultMap={{ 'Orchid Flowers on Branch.001': 'branch', 'Bake 1.002': 'flower', 'Bake 1.003': 'flower', 'Bake 1.004': 'flower' }}
           position={positions[KANAN_IDX]}
           rotation={rotations[2]}
+          scale={scales[2]}
           anisotropy={anisotropy}
           roughness={roughness}
           metalness={metalness}
@@ -579,13 +623,13 @@ export default function Scene() {
                 lastDragRef.current = { type: 'light', x: p.x, y: p.y, z: p.z };
               } else if (selected === MODEL_IDX && modelRef.current) {
                 const g = modelRef.current;
-                lastDragRef.current = { type: 'model', px: g.position.x, py: g.position.y, pz: g.position.z, rx: g.rotation.x, ry: g.rotation.y, rz: g.rotation.z };
+                lastDragRef.current = { type: 'model', px: g.position.x, py: g.position.y, pz: g.position.z, rx: g.rotation.x, ry: g.rotation.y, rz: g.rotation.z, ssx: g.scale.x, ssy: g.scale.y, ssz: g.scale.z };
               } else if (selected === KIRI_IDX && kiriRef.current) {
                 const g = kiriRef.current;
-                lastDragRef.current = { type: 'kiri', px: g.position.x, py: g.position.y, pz: g.position.z, rx: g.rotation.x, ry: g.rotation.y, rz: g.rotation.z };
+                lastDragRef.current = { type: 'kiri', px: g.position.x, py: g.position.y, pz: g.position.z, rx: g.rotation.x, ry: g.rotation.y, rz: g.rotation.z, ssx: g.scale.x, ssy: g.scale.y, ssz: g.scale.z };
               } else if (selected === KANAN_IDX && kananRef.current) {
                 const g = kananRef.current;
-                lastDragRef.current = { type: 'kanan', px: g.position.x, py: g.position.y, pz: g.position.z, rx: g.rotation.x, ry: g.rotation.y, rz: g.rotation.z };
+                lastDragRef.current = { type: 'kanan', px: g.position.x, py: g.position.y, pz: g.position.z, rx: g.rotation.x, ry: g.rotation.y, rz: g.rotation.z, ssx: g.scale.x, ssy: g.scale.y, ssz: g.scale.z };
               }
             }}
             onMouseDown={() => { if (orbitRef.current) orbitRef.current.enabled = false; }}
@@ -595,6 +639,7 @@ export default function Scene() {
               if (!d) return;
               let newPositions = positions.map(p => [...p]);
               let newRotations = rotations.map(r => [...r]);
+              const newScales = scales.map(s => [...s]);
               if (d.type === 'light') {
                 newPositions[DIRLIGHT_IDX] = [d.x, d.y, d.z];
                 setPositions(newPositions);
@@ -602,26 +647,35 @@ export default function Scene() {
               } else if (d.type === 'model') {
                 newPositions[MODEL_IDX] = [d.px, d.py, d.pz];
                 newRotations[0]         = [d.rx, d.ry, d.rz];
+                newScales[0]            = [d.ssx, d.ssy, d.ssz];
                 setPositions(newPositions);
                 setRotations(newRotations);
+                setScales(newScales);
                 set({ modelPos: { x: d.px, y: d.py, z: d.pz } });
                 set({ modelRot: { x: d.rx, y: d.ry, z: d.rz } });
+                set({ modelScale: { x: d.ssx, y: d.ssy, z: d.ssz } });
               } else if (d.type === 'kiri') {
                 newPositions[KIRI_IDX] = [d.px, d.py, d.pz];
                 newRotations[1]        = [d.rx, d.ry, d.rz];
+                newScales[1]           = [d.ssx, d.ssy, d.ssz];
                 setPositions(newPositions);
                 setRotations(newRotations);
+                setScales(newScales);
                 set({ kiriPos: { x: d.px, y: d.py, z: d.pz } });
                 set({ kiriRot: { x: d.rx, y: d.ry, z: d.rz } });
+                set({ kiriScale: { x: d.ssx, y: d.ssy, z: d.ssz } });
               } else if (d.type === 'kanan') {
                 newPositions[KANAN_IDX] = [d.px, d.py, d.pz];
                 newRotations[2]         = [d.rx, d.ry, d.rz];
+                newScales[2]            = [d.ssx, d.ssy, d.ssz];
                 setPositions(newPositions);
                 setRotations(newRotations);
+                setScales(newScales);
                 set({ kananPos: { x: d.px, y: d.py, z: d.pz } });
                 set({ kananRot: { x: d.rx, y: d.ry, z: d.rz } });
+                set({ kananScale: { x: d.ssx, y: d.ssy, z: d.ssz } });
               }
-              pushHistory(newPositions, newRotations);
+              pushHistory(newPositions, newRotations, newScales);
               lastDragRef.current = null;
             }}
           />
