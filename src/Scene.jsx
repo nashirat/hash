@@ -212,7 +212,7 @@ export default function Scene() {
   const [positions, setPositions] = useState([
     [0.6118922208161856, -0.6011740780362356, 0],                         // fullcomp
     [1.0419919785326108, -0.738036807420386, 2.48559209649641],           // dirlight
-    [-4.803838677298057, 1.1253724443364852, 0],                          // kiri
+    [-4.935919125616735, 1.232321298409813, 0],                           // kiri
     [11.653420826100549, -0.6302413794460366, -10.557948245570664],       // kanan
   ]);
   const [rotations, setRotations] = useState([
@@ -221,9 +221,9 @@ export default function Scene() {
     [0.008516537299090172, -0.6935727097241621, -0.13142840110837334],    // kanan
   ]);
   const [scales, setScales] = useState([
-    [1, 1, 1],   // fullcomp
-    [1, 1, 1],   // kiri
-    [1, 1, 1],   // kanan
+    [1.3166110111048857, 1.3166110111048857, 1.3166110111048857],   // fullcomp
+    [1.1235500819411783, 1.1235500819411783, 1.1235500819411783],   // kiri
+    [1, 1, 1],                                                       // kanan
   ]);
   const [selected, setSelected] = useState(null);
   const [tcMode, setTcMode]     = useState('translate');
@@ -287,7 +287,7 @@ export default function Scene() {
         },
       },
       modelScale: {
-        label: 'Scale', value: { x: 1, y: 1, z: 1 }, step: 0.01,
+        label: 'Scale', value: { x: 1.3166110111048857, y: 1.3166110111048857, z: 1.3166110111048857 }, step: 0.01,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setScales(s => s.map((sc, i) => i === 0 ? [v.x, v.y, v.z] : sc));
@@ -296,7 +296,7 @@ export default function Scene() {
     }),
     Kiri: folder({
       kiriPos: {
-        label: 'Position', value: { x: -4.803838677298057, y: 1.1253724443364852, z: 0 }, step: 0.01,
+        label: 'Position', value: { x: -4.935919125616735, y: 1.232321298409813, z: 0 }, step: 0.01,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setPositions(p => p.map((pos, i) => i === KIRI_IDX ? [v.x, v.y, v.z] : pos));
@@ -310,7 +310,7 @@ export default function Scene() {
         },
       },
       kiriScale: {
-        label: 'Scale', value: { x: 1, y: 1, z: 1 }, step: 0.01,
+        label: 'Scale', value: { x: 1.1235500819411783, y: 1.1235500819411783, z: 1.1235500819411783 }, step: 0.01,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setScales(s => s.map((sc, i) => i === 1 ? [v.x, v.y, v.z] : sc));
