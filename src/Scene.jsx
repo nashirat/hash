@@ -210,14 +210,14 @@ function DirLight({ groupRef, position, color, intensity, shadowIntensity,
 export default function Scene() {
   const [positions, setPositions] = useState([
     [0.09948271227865446, -0.7613390885327538, 0],                        // fullcomp
-    [1.6563406287637856, -0.5124859406013547, 1.3800263067216396],        // dirlight
+    [1.5494332350434508, -0.7042463700944723, 1.2594799824242129],        // dirlight
     [-4.2275190627220915, 0.24783553448404338, 0],                        // kiri
-    [8.32196218234657, -0.76, -11.367553468085417],                       // kanan
+    [10.694104321521328, -0.5273063106846092, -11.367553468085417],       // kanan
   ]);
   const [rotations, setRotations] = useState([
     [0, -0.2446801252098483, 0],                                          // fullcomp
     [0.013708394273127152, 0.06546152696165551, -0.1897699151722256],     // kiri
-    [0, -0.5960777643304127, 0],                                          // kanan
+    [0, -0.7040454240681647, 0],                                          // kanan
   ]);
   const [selected, setSelected] = useState(null);
   const [tcMode, setTcMode]     = useState('translate');
@@ -296,14 +296,14 @@ export default function Scene() {
     }),
     Kanan: folder({
       kananPos: {
-        label: 'Position', value: { x: 8.32196218234657, y: -0.76, z: -11.367553468085417 }, step: 0.01,
+        label: 'Position', value: { x: 10.694104321521328, y: -0.5273063106846092, z: -11.367553468085417 }, step: 0.01,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setPositions(p => p.map((pos, i) => i === KANAN_IDX ? [v.x, v.y, v.z] : pos));
         },
       },
       kananRot: {
-        label: 'Rotation', value: { x: 0, y: -0.5960777643304127, z: 0 }, step: 0.01,
+        label: 'Rotation', value: { x: 0, y: -0.7040454240681647, z: 0 }, step: 0.01,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setRotations(r => r.map((rot, i) => i === 2 ? [v.x, v.y, v.z] : rot));
@@ -312,7 +312,7 @@ export default function Scene() {
     }),
     'Dir Light': folder({
       dlPos: {
-        label: 'Position', value: { x: 1.6563406287637856, y: -0.5124859406013547, z: 1.3800263067216396 }, step: 0.1,
+        label: 'Position', value: { x: 1.5494332350434508, y: -0.7042463700944723, z: 1.2594799824242129 }, step: 0.1,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setPositions(p => p.map((pos, i) => i === DIRLIGHT_IDX ? [v.x, v.y, v.z] : pos));
