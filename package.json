@@ -17,6 +17,7 @@
     "@react-three/postprocessing": "^3.0.4",
     "@vitejs/plugin-react": "^5.0.0",
     "draco3d": "^1.5.7",
+    "leva": "^0.10.1",
     "postprocessing": "^6.39.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
