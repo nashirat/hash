@@ -209,14 +209,14 @@ function DirLight({ groupRef, position, color, intensity, shadowIntensity,
 // ── Main Scene ────────────────────────────────────────────────────────────────
 export default function Scene() {
   const [positions, setPositions] = useState([
-    [0.5074088878026501, -0.5373811700847073, 0],                         // fullcomp
-    [1.662888982806127, -0.728430989601503, 1.2599660344948158],          // dirlight
-    [-4.438613913524653, 1.1253724443364852, 0],                          // kiri
-    [10.108357053876183, -0.6302413794460366, -10.3677992384738],         // kanan
+    [0.6118922208161856, -0.6011740780362356, 0],                         // fullcomp
+    [1.0419919785326108, -0.738036807420386, 2.48559209649641],           // dirlight
+    [-4.803838677298057, 1.1253724443364852, 0],                          // kiri
+    [11.653420826100549, -0.6302413794460366, -10.557948245570664],       // kanan
   ]);
   const [rotations, setRotations] = useState([
-    [0.02913724138516111, -0.3351704899357909, -0.016084677765577204],    // fullcomp
-    [0.4087769998130987, 0.11085110653122913, -0.17119587747896559],      // kiri
+    [-0.0738592006998472, -0.2704458426989292, -0.011016516478293699],    // fullcomp
+    [0.41203814434549135, 0.16486072551020498, -0.194917409168369],       // kiri
     [0.008516537299090172, -0.6935727097241621, -0.13142840110837334],    // kanan
   ]);
   const [selected, setSelected] = useState(null);
@@ -251,13 +251,13 @@ export default function Scene() {
         'Cineon':      THREE.CineonToneMapping,
         'None':        THREE.LinearToneMapping,
       }},
-      exposure:    { label: 'Exposure',    value: 3.5,  min: 0,  max: 10, step: 0.01 },
-      saturation:  { label: 'Saturation',  value: 1.15, min: 0,  max: 3,  step: 0.01 },
+      exposure:    { label: 'Exposure',    value: 2,    min: 0,  max: 10, step: 0.01 },
+      saturation:  { label: 'Saturation',  value: 1.1,  min: 0,  max: 3,  step: 0.01 },
       brightness:  { label: 'Brightness',  value: 0,    min: -1, max: 1,  step: 0.01 },
       contrast:    { label: 'Contrast',    value: 0.1,  min: -1, max: 1,  step: 0.01 },
     }),
     Model: folder({
-      fov:                { label: 'FOV',               value: 45,  min: 10, max: 120, step: 1    },
+      fov:                { label: 'FOV',               value: 50,  min: 10, max: 120, step: 1    },
       anisotropy:         { label: 'Anisotropy',       value: 16,  options: [1, 2, 4, 8, 16]    },
       roughness:          { label: 'Roughness',         value: 1,   min: 0, max: 1, step: 0.01  },
       metalness:          { label: 'Metalness',         value: 0,   min: 0, max: 1, step: 0.01  },
@@ -266,14 +266,14 @@ export default function Scene() {
       sheen:              { label: 'Sheen',             value: 0,   min: 0, max: 1, step: 0.01  },
       sheenRoughness:     { label: 'Sheen Roughness',   value: 0.5, min: 0, max: 1, step: 0.01  },
       modelPos: {
-        label: 'Position', value: { x: 0.5074088878026501, y: -0.5373811700847073, z: 0 }, step: 0.01,
+        label: 'Position', value: { x: 0.6118922208161856, y: -0.6011740780362356, z: 0 }, step: 0.01,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setPositions(p => p.map((pos, i) => i === MODEL_IDX ? [v.x, v.y, v.z] : pos));
         },
       },
       modelRot: {
-        label: 'Rotation', value: { x: 0.02913724138516111, y: -0.3351704899357909, z: -0.016084677765577204 }, step: 0.01,
+        label: 'Rotation', value: { x: -0.0738592006998472, y: -0.2704458426989292, z: -0.011016516478293699 }, step: 0.01,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setRotations(r => r.map((rot, i) => i === 0 ? [v.x, v.y, v.z] : rot));
@@ -282,14 +282,14 @@ export default function Scene() {
     }),
     Kiri: folder({
       kiriPos: {
-        label: 'Position', value: { x: -4.438613913524653, y: 1.1253724443364852, z: 0 }, step: 0.01,
+        label: 'Position', value: { x: -4.803838677298057, y: 1.1253724443364852, z: 0 }, step: 0.01,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setPositions(p => p.map((pos, i) => i === KIRI_IDX ? [v.x, v.y, v.z] : pos));
         },
       },
       kiriRot: {
-        label: 'Rotation', value: { x: 0.4087769998130987, y: 0.11085110653122913, z: -0.17119587747896559 }, step: 0.01,
+        label: 'Rotation', value: { x: 0.41203814434549135, y: 0.16486072551020498, z: -0.194917409168369 }, step: 0.01,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setRotations(r => r.map((rot, i) => i === 1 ? [v.x, v.y, v.z] : rot));
@@ -298,7 +298,7 @@ export default function Scene() {
     }),
     Kanan: folder({
       kananPos: {
-        label: 'Position', value: { x: 10.108357053876183, y: -0.6302413794460366, z: -10.3677992384738 }, step: 0.01,
+        label: 'Position', value: { x: 11.653420826100549, y: -0.6302413794460366, z: -10.557948245570664 }, step: 0.01,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setPositions(p => p.map((pos, i) => i === KANAN_IDX ? [v.x, v.y, v.z] : pos));
@@ -314,7 +314,7 @@ export default function Scene() {
     }),
     'Dir Light': folder({
       dlPos: {
-        label: 'Position', value: { x: 1.662888982806127, y: -0.728430989601503, z: 1.2599660344948158 }, step: 0.1,
+        label: 'Position', value: { x: 1.0419919785326108, y: -0.738036807420386, z: 2.48559209649641 }, step: 0.1,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setPositions(p => p.map((pos, i) => i === DIRLIGHT_IDX ? [v.x, v.y, v.z] : pos));
@@ -329,7 +329,7 @@ export default function Scene() {
     'Hemi Light': folder({
       hemiSky:       { label: 'Sky',       value: '#ffffff'                                },
       hemiGround:    { label: 'Ground',    value: '#000000'                                },
-      hemiIntensity: { label: 'Intensity', value: 0.3,     min: 0, max: 5,   step: 0.01  },
+      hemiIntensity: { label: 'Intensity', value: 0.5,     min: 0, max: 5,   step: 0.01  },
     }),
     Transform: folder({
       tcModeVal: {
