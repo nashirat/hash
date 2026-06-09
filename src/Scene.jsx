@@ -211,12 +211,12 @@ export default function Scene() {
   const [positions, setPositions] = useState([
     [0.09948271227865446, -0.7613390885327538, 0],                        // fullcomp
     [1.5494332350434508, -0.7042463700944723, 1.2594799824242129],        // dirlight
-    [-4.2275190627220915, 0.24783553448404338, 0],                        // kiri
+    [-4.434882455920719, 1.1253724443364852, 0],                          // kiri
     [10.694104321521328, -0.5273063106846092, -11.367553468085417],       // kanan
   ]);
   const [rotations, setRotations] = useState([
     [0, -0.2446801252098483, 0],                                          // fullcomp
-    [0.013708394273127152, 0.06546152696165551, -0.1897699151722256],     // kiri
+    [0.4087769998130987, 0.11085110653122913, -0.17119587747896559],      // kiri
     [0, -0.7040454240681647, 0],                                          // kanan
   ]);
   const [selected, setSelected] = useState(null);
@@ -282,14 +282,14 @@ export default function Scene() {
     }),
     Kiri: folder({
       kiriPos: {
-        label: 'Position', value: { x: -4.2275190627220915, y: 0.24783553448404338, z: 0 }, step: 0.01,
+        label: 'Position', value: { x: -4.434882455920719, y: 1.1253724443364852, z: 0 }, step: 0.01,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setPositions(p => p.map((pos, i) => i === KIRI_IDX ? [v.x, v.y, v.z] : pos));
         },
       },
       kiriRot: {
-        label: 'Rotation', value: { x: 0.013708394273127152, y: 0.06546152696165551, z: -0.1897699151722256 }, step: 0.01,
+        label: 'Rotation', value: { x: 0.4087769998130987, y: 0.11085110653122913, z: -0.17119587747896559 }, step: 0.01,
         onChange: (v, _, { initial }) => {
           if (initial) return;
           setRotations(r => r.map((rot, i) => i === 1 ? [v.x, v.y, v.z] : rot));
